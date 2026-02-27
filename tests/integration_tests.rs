@@ -5,7 +5,7 @@ use std::{
 };
 
 enum Output<'a> {
-    FullStdout(&'a str),
+    FullStdout(&'a [u8]),
     PartialStdout(&'a str),
     PartialStderr(&'a str),
 }
@@ -38,6 +38,7 @@ impl<'a> Cmd<'a> {
         self
     }
 
+    #[track_caller]
     fn assert(&self, success: bool) {
         let rustlings_bin = {
             let mut path = env::current_exe().unwrap();
@@ -60,38 +61,37 @@ impl<'a> Cmd<'a> {
 
         cmd.args(self.args).stdin(Stdio::null());
 
-        let status = match self.output {
-            None => cmd
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .status()
-                .unwrap(),
+        let output = cmd.output().unwrap();
+        match self.output {
+            None => (),
             Some(FullStdout(stdout)) => {
-                let output = cmd.stderr(Stdio::null()).output().unwrap();
-                assert_eq!(from_utf8(&output.stdout).unwrap(), stdout);
-                output.status
+                assert_eq!(output.stdout, stdout);
             }
             Some(PartialStdout(stdout)) => {
-                let output = cmd.stderr(Stdio::null()).output().unwrap();
                 assert!(from_utf8(&output.stdout).unwrap().contains(stdout));
-                output.status
             }
             Some(PartialStderr(stderr)) => {
-                let output = cmd.stdout(Stdio::null()).output().unwrap();
                 assert!(from_utf8(&output.stderr).unwrap().contains(stderr));
-                output.status
             }
         };
 
-        assert_eq!(status.success(), success, "{cmd:?}");
+        if output.status.success() != success {
+            panic!(
+                "{cmd:?}\n\nstdout:\n{}\n\nstderr:\n{}",
+                from_utf8(&output.stdout).unwrap(),
+                from_utf8(&output.stderr).unwrap(),
+            );
+        }
     }
 
     #[inline]
+    #[track_caller]
     fn success(&self) {
         self.assert(true);
     }
 
     #[inline]
+    #[track_caller]
     fn fail(&self) {
         self.assert(false);
     }
@@ -148,7 +148,7 @@ fn hint() {
     Cmd::default()
         .current_dir("tests/test_exercises")
         .args(&["hint", "test_failure"])
-        .output(FullStdout("The answer to everything: 42\n"))
+        .output(FullStdout(b"The answer to everything: 42\n"))
         .success();
 }
 
