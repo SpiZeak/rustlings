@@ -193,18 +193,18 @@ impl Drop for ProgressCounter<'_, '_> {
 
 pub fn progress_bar<'a>(
     writer: &mut impl CountedWrite<'a>,
-    progress: u16,
-    total: u16,
+    progress: u32,
+    total: u32,
     term_width: u16,
 ) -> io::Result<()> {
-    debug_assert!(total <= 999);
-    debug_assert!(progress <= total);
-
     const PREFIX: &[u8] = b"Progress: [";
     const PREFIX_WIDTH: u16 = PREFIX.len() as u16;
     const POSTFIX_WIDTH: u16 = "] xxx/xxx".len() as u16;
     const WRAPPER_WIDTH: u16 = PREFIX_WIDTH + POSTFIX_WIDTH;
     const MIN_LINE_WIDTH: u16 = WRAPPER_WIDTH + 4;
+
+    debug_assert!(total <= 999);
+    debug_assert!(progress <= total);
 
     if term_width < MIN_LINE_WIDTH {
         writer.write_ascii(b"Progress: ")?;
@@ -215,7 +215,8 @@ pub fn progress_bar<'a>(
     let stdout = writer.stdout();
     stdout.write_all(PREFIX)?;
 
-    let width = term_width - WRAPPER_WIDTH;
+    // Use u32 to prevent the intermediate multiplication from overflowing
+    let width = u32::from(term_width - WRAPPER_WIDTH);
     let filled = (width * progress) / total;
 
     stdout.queue(SetForegroundColor(Color::Green))?;
@@ -225,14 +226,13 @@ pub fn progress_bar<'a>(
 
     if filled < width {
         stdout.write_all(b">")?;
-    }
 
-    let width_minus_filled = width - filled;
-    if width_minus_filled > 1 {
-        let red_part_width = width_minus_filled - 1;
-        stdout.queue(SetForegroundColor(Color::Red))?;
-        for _ in 0..red_part_width {
-            stdout.write_all(b"-")?;
+        let width_minus_filled = width - filled;
+        if width_minus_filled > 1 {
+            stdout.queue(SetForegroundColor(Color::Red))?;
+            for _ in 1..width_minus_filled {
+                stdout.write_all(b"-")?;
+            }
         }
     }
 

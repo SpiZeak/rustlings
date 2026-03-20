@@ -5,7 +5,7 @@ use crossterm::{
 };
 use serde::Deserialize;
 use std::{
-    env::set_current_dir,
+    env::{current_dir, set_current_dir},
     fs::{self, create_dir},
     io::{self, Write},
     path::Path,
@@ -169,14 +169,27 @@ pub fn init() -> Result<()> {
     fs::write(".vscode/extensions.json", VS_CODE_EXTENSIONS_JSON)
         .context("Failed to create the file `rustlings/.vscode/extensions.json`")?;
 
-    if init_git {
-        // Ignore any Git error because Git initialization is not required.
-        let _ = Command::new("git")
-            .arg("init")
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status();
+    if init_git && let Ok(dir) = current_dir() {
+        let mut dir = dir.as_path();
+
+        loop {
+            if dir.join(".git").exists() || dir.join(".jj").exists() {
+                break;
+            }
+
+            if let Some(parent) = dir.parent() {
+                dir = parent;
+            } else {
+                // Ignore any Git error because Git initialization is not required.
+                let _ = Command::new("git")
+                    .arg("init")
+                    .stdin(Stdio::null())
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .status();
+                break;
+            }
+        }
     }
 
     stdout.queue(SetForegroundColor(Color::Green))?;
